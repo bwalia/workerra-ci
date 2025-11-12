@@ -1,0 +1,108 @@
+service_name: werra
+
+targetCluster: k3s1
+targetEnv: demo
+targetNS: demo
+
+envPreferences:
+  timeZone: Europe/London
+  codeIgniterEnv: production
+
+architecture:
+  http_server_type: openresty   # apache2 | openresty are supported
+
+targetImage: "bwalia/workerra-ci"
+targetImageTag: "latest"
+
+safeSealedSecret: helmfilesecretsplaceholder
+
+# updated secrets
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+# ports
+svcAccessPort: 31277
+
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAdminer:
+  enabled: true
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: demo.workerra.org
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+ingressAdminer:
+  enabled: false
+  # className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: adminer.workerra.org
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+
+adminer:
+  port: 31441
+  
+resources:
+  requests:
+    memory: 2Gi
+    cpu: 256m
+  limits:
+    memory: 6Gi
+    cpu: 1024m
+
+storageSettings:
+  storageClassName: local-path
+  accessModes: ReadWriteOnce
+  diskSize: 10Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  maxUnavailable: 1
+  targetCPUUtilizationPercentage: 80
+
+deploymentStrategy:
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
+
+disableDefaultNodeSelector: false
+
+affinity: {}
+  # affinity:
+  #   nodeAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       nodeSelectorTerms:
+  #         - matchExpressions:
+  #             - key: disktype
+  #               operator: In
+  #               values:
+  #                 - ssd
+

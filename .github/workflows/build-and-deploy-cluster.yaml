@@ -1,4 +1,4 @@
-name: "-> Build Workstation CRM Docker Image and Deploy to K3S Cluster"
+name: "-> Build Workstation UK CRM Docker Image and Deploy to K3S Cluster"
 
 on:
   push:

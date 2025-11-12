@@ -1,4 +1,4 @@
-name: workerra-ci Login Test
+name: Workstation UK Login Test
 on:
   schedule:
     - cron: '0 0 * * *'
