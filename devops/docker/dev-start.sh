@@ -10,8 +10,8 @@ cp ~/.workerra-ci.env env
 
 docker build -t localuser/workerra-ci-ci4 -f devops/docker/Dockerfile .
 
-docker-compose -f devops/docker-compose.yaml down
-docker-compose -f devops/docker-compose.yaml up -d --build --remove-orphans
+docker compose -f devops/docker-compose.yaml down
+docker compose -f devops/docker-compose.yaml up -d --build --remove-orphans
 
 #sleep 600
 #rm -Rf devops/init/01.sql
