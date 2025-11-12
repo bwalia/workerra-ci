@@ -146,13 +146,12 @@ class CreateProjectJobsTables extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('uuid');
         $this->forge->addKey('uuid_project_id');
         $this->forge->addKey('uuid_business_id');
         $this->forge->addKey('assigned_to_user_id');
         $this->forge->addKey('assigned_to_employee_id');
         $this->forge->addKey('status');
-        $this->forge->createTable('project_jobs');
+        $this->forge->createTable('project_jobs', true);
 
         // Create project_job_phases table
         $this->forge->addField([
@@ -271,7 +270,6 @@ class CreateProjectJobsTables extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('uuid');
         $this->forge->addKey('uuid_project_job_id');
         $this->forge->addKey('uuid_business_id');
         $this->forge->addKey('phase_order');
@@ -370,7 +368,6 @@ class CreateProjectJobsTables extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('uuid');
         $this->forge->addKey('uuid_project_job_id');
         $this->forge->addKey('uuid_phase_id');
         $this->forge->addKey('uuid_business_id');
@@ -380,21 +377,21 @@ class CreateProjectJobsTables extends Migration
         $this->forge->createTable('project_job_scheduler');
 
         // Extend tasks table
-        $fields = [
-            'uuid_project_job_id' => [
-                'type' => 'VARCHAR',
-                'constraint' => 64,
-                'null' => true,
-                'after' => 'projects_id',
-            ],
-            'uuid_job_phase_id' => [
-                'type' => 'VARCHAR',
-                'constraint' => 64,
-                'null' => true,
-                'after' => 'uuid_project_job_id',
-            ],
-        ];
-        $this->forge->addColumn('tasks', $fields);
+        // $fields = [
+        //     'uuid_project_job_id' => [
+        //         'type' => 'VARCHAR',
+        //         'constraint' => 64,
+        //         'null' => true,
+        //         'after' => 'projects_id',
+        //     ],
+        //     'uuid_job_phase_id' => [
+        //         'type' => 'VARCHAR',
+        //         'constraint' => 64,
+        //         'null' => true,
+        //         'after' => 'uuid_project_job_id',
+        //     ],
+        // ];
+        // $this->forge->addColumn('tasks', $fields);
         $this->forge->addKey('uuid_project_job_id');
         $this->forge->addKey('uuid_job_phase_id');
 

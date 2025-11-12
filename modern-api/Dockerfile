@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -17,8 +17,8 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
 COPY app ./app
-COPY migrations ./migrations
-COPY seeds ./seeds
+# COPY migrations ./migrations
+# COPY seeds ./seeds
 
 EXPOSE 8000
 

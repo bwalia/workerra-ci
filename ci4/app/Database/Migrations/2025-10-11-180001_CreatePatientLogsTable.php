@@ -343,7 +343,6 @@ class CreatePatientLogsTable extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('uuid');
         $this->forge->addKey('uuid_business_id');
         $this->forge->addKey('patient_contact_id');
         $this->forge->addKey('staff_uuid');
