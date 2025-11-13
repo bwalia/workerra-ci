@@ -498,14 +498,14 @@ class Services extends Api
 		fwrite($secretFileScript, $secretCommand);
 		fclose($secretFileScript);
 
-		shell_exec('/bin/bash /var/www/html/writable/secret/' . $userSelectedENV . '-kubeseal-secret.sh');
+		$kubesealCommand = shell_exec('/bin/bash /var/www/html/writable/secret/' . $userSelectedENV . '-kubeseal-secret.sh');
 
 		$secretsArray = [];
 		foreach ($secretYamlArray as $templateKey3 => $secretYamlTemplate3) {
 			$sealedSecretContent = file_get_contents(WRITEPATH . "secret/" . $userSelectedENV . "-sealed-secret-" . $templateKey3 . "-" . $uuid . ".yaml");
 			if (empty($sealedSecretContent)) {
 				echo json_encode([
-					"message" => "Kubeseal command failed. Please check kubernetes cluster connection is working and Kubeseal is setup.",
+					"message" => "Kubeseal command failed. Please check kubernetes cluster connection is working and Kubeseal is setup. " . $kubesealCommand,
 					"status" => 403
 				]);
 				die;

@@ -2,21 +2,35 @@
 
 namespace App\Controllers;
 
-use App\Controllers\Core\CommonController;
+use App\Controllers\BaseController;
 
 use App\Models\Users_model;
 use App\Models\Meta_model;
 use App\Models\Dashboard_model;
 use App\Models\Core\Common_model;
+use Config\Services;
 
-class Dashboard extends CommonController
+class Dashboard extends BaseController
 {
 	public $meta_model;
 	public $common_model;
 	public $dashboard_model;
+	public $model;
+	protected $businessUuid;
+	protected $session;
+
 	public function __construct()
 	{
 		parent::__construct();
+		$this->session = Services::session();
+
+		// Check if user is logged in
+		if(!$this->session->get('uuid')){
+			header('Location:/');
+			die();
+		}
+
+		$this->businessUuid = session('uuid_business');
 		$this->model = new Users_model();
 		$this->meta_model = new Meta_model();
 		$this->common_model = new Common_model();

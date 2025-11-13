@@ -13,6 +13,7 @@ use App\Models\Users_model;
 use PHPUnit\Framework\Constraint\FileExists;
 use Config\Services;
 use \Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use App\Libraries\UUID;
 
 class CommonController extends BaseController
@@ -74,7 +75,8 @@ class CommonController extends BaseController
 		}
 		$key = Services::getSecretKey();
 		try {
-			$tokenArray = JWT::decode($this->session->get('jwt_token'), $key, array('HS256'));
+			
+			$tokenArray = JWT::decode($this->session->get('jwt_token'), new Key($key, 'HS256'));
 		}catch (\Firebase\JWT\ExpiredException $e) {
 			//print "Error!: " . $e->getMessage();
 			header('Location:/home/logout');

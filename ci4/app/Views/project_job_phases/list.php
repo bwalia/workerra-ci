@@ -29,28 +29,30 @@
                                     </div>
                                     <div class="col-md-3">
                                         <strong>Status:</strong>
-                                        <span class="badge badge-<?php
-                                            echo match($job->status) {
-                                                'Planning' => 'warning',
-                                                'In Progress' => 'primary',
-                                                'Completed' => 'success',
-                                                'On Hold' => 'secondary',
-                                                'Cancelled' => 'danger',
-                                                default => 'secondary'
-                                            };
-                                        ?>"><?= $job->status ?></span>
+                                        <?php
+                                            $statusClass = 'secondary';
+                                            switch($job->status) {
+                                                case 'Planning': $statusClass = 'warning'; break;
+                                                case 'In Progress': $statusClass = 'primary'; break;
+                                                case 'Completed': $statusClass = 'success'; break;
+                                                case 'On Hold': $statusClass = 'secondary'; break;
+                                                case 'Cancelled': $statusClass = 'danger'; break;
+                                            }
+                                        ?>
+                                        <span class="badge badge-<?= $statusClass ?>"><?= $job->status ?></span>
                                     </div>
                                     <div class="col-md-3">
                                         <strong>Priority:</strong>
-                                        <span class="badge badge-<?php
-                                            echo match($job->priority) {
-                                                'Low' => 'secondary',
-                                                'Normal' => 'info',
-                                                'High' => 'warning',
-                                                'Urgent' => 'danger',
-                                                default => 'secondary'
-                                            };
-                                        ?>"><?= $job->priority ?></span>
+                                        <?php
+                                            $priorityClass = 'secondary';
+                                            switch($job->priority) {
+                                                case 'Low': $priorityClass = 'secondary'; break;
+                                                case 'Normal': $priorityClass = 'info'; break;
+                                                case 'High': $priorityClass = 'warning'; break;
+                                                case 'Urgent': $priorityClass = 'danger'; break;
+                                            }
+                                        ?>
+                                        <span class="badge badge-<?= $priorityClass ?>"><?= $job->priority ?></span>
                                     </div>
                                     <div class="col-md-3">
                                         <strong>Completion:</strong> <?= $job->completion_percentage ?? 0 ?>%
