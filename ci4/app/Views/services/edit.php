@@ -1348,12 +1348,18 @@
     $(document).ready(function() {
         $("#helm-deploy").click(function() {
             selectedTags = [];
-            var x = $(".select-env-tag"); 
+            var x = $(".select-env-tag");
             const serviceType = $("#service_type").val();
             $.each(x, function(i, field) {
                 selectedTags.push({[field.name]: $(field).is(':checked')});
-            }); 
+            });
             console.log({selectedTags});
+
+            // Disable button and show loading state
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Deploying...');
+            $("#deplyMessage").html('<p class="text-info"><i class="fa fa-spinner fa-spin"></i> Deployment in progress...</p>');
+
             var Status = $(this).val();
             $.ajax({
                 url: "/services/deploy_service/<?= @$service->uuid ?>",
@@ -1363,19 +1369,73 @@
                 },
                 success: function(response) {
                     const res = typeof(response) == "string" ? JSON.parse(response) : response;
-                    if (res.status != 200) {
-                        const msg = `<p class="text-danger">${res.message}</p>`
-                        $("#deplyMessage").html(msg);
+
+                    // Handle different response formats
+                    let messageHtml = '';
+
+                    if (res.status == 200) {
+                        messageHtml = `<p class="text-success"><i class="fa fa-check-circle"></i> ${res.message}</p>`;
+
+                        // Show deployment details if available
+                        if (res.deployments && res.deployments.length > 0) {
+                            messageHtml += '<div style="margin-top:10px;"><strong>Deployment Details:</strong><ul style="margin-top:5px;">';
+                            res.deployments.forEach(function(deployment) {
+                                const statusIcon = deployment.success ? '<i class="fa fa-check text-success"></i>' : '<i class="fa fa-times text-danger"></i>';
+                                const statusText = deployment.success ? 'Success' : 'Failed';
+                                messageHtml += `<li>${statusIcon} <strong>${deployment.environment}</strong>: ${statusText}`;
+                                if (deployment.deployment_uuid) {
+                                    messageHtml += ` <small>(ID: ${deployment.deployment_uuid.substring(0, 8)}...)</small>`;
+                                }
+                                if (deployment.error) {
+                                    messageHtml += `<br><small class="text-danger">Error: ${deployment.error}</small>`;
+                                }
+                                messageHtml += '</li>';
+                            });
+                            messageHtml += '</ul></div>';
+
+                            // Show summary
+                            if (res.total > 1) {
+                                messageHtml += `<p style="margin-top:10px;"><strong>Summary:</strong> ${res.successful}/${res.total} deployments successful</p>`;
+                            }
+                        }
+                    } else if (res.status == 207) {
+                        // Partial success
+                        messageHtml = `<p class="text-warning"><i class="fa fa-exclamation-triangle"></i> ${res.message}</p>`;
+
+                        if (res.deployments && res.deployments.length > 0) {
+                            messageHtml += '<div style="margin-top:10px;"><ul>';
+                            res.deployments.forEach(function(deployment) {
+                                const statusClass = deployment.success ? 'text-success' : 'text-danger';
+                                const statusIcon = deployment.success ? '<i class="fa fa-check"></i>' : '<i class="fa fa-times"></i>';
+                                messageHtml += `<li class="${statusClass}">${statusIcon} <strong>${deployment.environment}</strong>: ${deployment.success ? 'Success' : 'Failed'}`;
+                                if (deployment.error) {
+                                    messageHtml += `<br><small>Error: ${deployment.error}</small>`;
+                                }
+                                messageHtml += '</li>';
+                            });
+                            messageHtml += '</ul></div>';
+                        }
                     } else {
-                        const msg = `<p class="text-success">${res.message}</p>`
-                        $("#deplyMessage").html(msg);
+                        // Error
+                        messageHtml = `<p class="text-danger"><i class="fa fa-times-circle"></i> ${res.message || 'Deployment failed'}</p>`;
+                        if (res.error) {
+                            messageHtml += `<small class="text-muted">${res.error}</small>`;
+                        }
                     }
+
+                    $("#deplyMessage").html(messageHtml);
                 },
                 error: function(jqXHR, textStatus, errorThrown) {
-                    console.log({textStatus, errorThrown});
+                    console.error({textStatus, errorThrown});
+                    const errorMsg = jqXHR.responseJSON?.message || 'Deployment request failed. Please check logs.';
+                    $("#deplyMessage").html(`<p class="text-danger"><i class="fa fa-times-circle"></i> ${errorMsg}</p>`);
+                },
+                complete: function() {
+                    // Re-enable button
+                    $btn.prop('disabled', false).html('Yes');
                 }
             });
-        }); 
+        });
     })
 
     $('#DeployService').on('click', function() {
