@@ -1,4 +1,4 @@
-name: workerra-ci Cypress UI tests suite by QA
+name: "*** Nightly *** Workerra CI Cypress UI Unit Testing QA Pipeline"
 on:
   schedule:
     - cron: '0 21 * * *'

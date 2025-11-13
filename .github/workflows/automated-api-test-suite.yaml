@@ -1,4 +1,4 @@
-name: workerra-ci API Test Suite
+name: Workstation UK API Test Suite
 on:
   schedule:
     - cron: '0 0 * * *'

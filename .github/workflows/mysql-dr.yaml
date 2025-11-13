@@ -1,4 +1,4 @@
-name: "Workstation CRM DR DB Backup MySQL to Minio"
+name: "Workstation UK CRM DR DB Backup MySQL to Minio"
 
 on:
   push:

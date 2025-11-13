@@ -1,0 +1,108 @@
+service_name: werra
+
+targetCluster: k3s1
+targetEnv: demo
+targetNS: demo
+
+envPreferences:
+  timeZone: Europe/London
+  codeIgniterEnv: production
+
+architecture:
+  http_server_type: openresty   # apache2 | openresty are supported
+
+targetImage: "bwalia/workerra-ci"
+targetImageTag: "latest"
+
+safeSealedSecret: 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
+
+# updated secrets
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+# ports
+svcAccessPort: 31277
+
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAdminer:
+  enabled: true
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: demo.workerra.org
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+ingressAdminer:
+  enabled: false
+  # className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: adminer.workerra.org
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+
+adminer:
+  port: 31441
+  
+resources:
+  requests:
+    memory: 2Gi
+    cpu: 256m
+  limits:
+    memory: 6Gi
+    cpu: 1024m
+
+storageSettings:
+  storageClassName: local-path
+  accessModes: ReadWriteOnce
+  diskSize: 10Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  maxUnavailable: 1
+  targetCPUUtilizationPercentage: 80
+
+deploymentStrategy:
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
+
+disableDefaultNodeSelector: false
+
+affinity: {}
+  # affinity:
+  #   nodeAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       nodeSelectorTerms:
+  #         - matchExpressions:
+  #             - key: disktype
+  #               operator: In
+  #               values:
+  #                 - ssd
+
