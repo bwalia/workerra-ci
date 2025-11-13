@@ -17,6 +17,9 @@ use App\Models\Companies;
 use App\Models\Email_model;
 use App\Models\ServiceDomainsModel;
 use Symfony\Component\Yaml\Yaml;
+use App\Libraries\K8sDeployment\DeploymentManager;
+use App\Libraries\K8sDeployment\DeploymentLogger;
+use App\Models\Deployment_model;
 
 
 class Services extends Api
@@ -32,6 +35,9 @@ class Services extends Api
 	public $serviceDomainModel;
 	public $emailModel;
 	public $compniesModel;
+	public $deploymentManager;
+	public $deploymentLogger;
+	public $deploymentModel;
 
 	public function __construct()
 	{
@@ -57,6 +63,11 @@ class Services extends Api
 		$menucode = $this->getMenuCode("/services");
 		$this->session->set("menucode", $menucode);
 		$this->serviceDomainModel = new ServiceDomainsModel();
+
+		// Initialize deployment system
+		$this->deploymentManager = new DeploymentManager();
+		$this->deploymentLogger = new DeploymentLogger();
+		$this->deploymentModel = new Deployment_model();
 	}
 
 	public function index()
@@ -296,48 +307,114 @@ class Services extends Api
 		return redirect()->to('/services');
 	}
 
+	/**
+	 * Deploy service to Kubernetes using the new DeploymentManager
+	 *
+	 * Refactored to use modular K8sDeployment libraries with:
+	 * - Proper error handling and logging
+	 * - Deployment tracking in database
+	 * - Step-by-step execution with rollback capability
+	 * - Security improvements (input validation, safe file operations)
+	 */
 	public function deploy_service($uuid = 0)
 	{
-		if (!empty($uuid)) {
-			$post = $this->request->getPost();
-			if (isset($post['data']['serviceType']) && $post['data']['serviceType'] === "marketing") {
+		if (empty($uuid)) {
+			echo json_encode([
+				"message" => "Service UUID is required",
+				"status" => 400
+			]);
+			return;
+		}
+
+		$post = $this->request->getPost();
+
+		// Handle marketing email deployment (unchanged)
+		if (isset($post['data']['serviceType']) && $post['data']['serviceType'] === "marketing") {
+			try {
 				$this->create_marketing_template($uuid);
 				echo json_encode([
 					"message" => "Email has been sent to selected companies.",
 					"status" => 200
 				]);
-			} else {
-				$selectedTags = array_filter($post['data']['selectedTags'], 'filterFalseValues');
-				foreach ($selectedTags as $tk => $selectedTag) {
-					$selectedTag = array_keys($selectedTag);
-
-					if (empty($selectedTag[0])) {
-						echo json_encode([
-							"message" => "No environment selected",
-							"status" => 403
-						]);
-						die;
-					} else {
-						$this->create_templates($uuid, $selectedTag[0]);
-						$this->run_steps($uuid, $selectedTag[0]);
-						$installScript = '/bin/bash /var/www/html/writable/helm/' . $selectedTag[0] . '-install-' . $uuid . '.sh';
-						$output = shell_exec($installScript);
-					}
-				}
-				// $this->push_service_env_vars($uuid);
-				// $this->gen_service_yaml_file($uuid);
-				// echo $output; die;
+			} catch (\Exception $e) {
+				log_message('error', 'Marketing deployment failed: ' . $e->getMessage());
 				echo json_encode([
-					"message" => "Service deployment process started OK. Verify the deployment using kubectl get pods command",
-					"status" => 200
+					"message" => "Marketing deployment failed: " . $e->getMessage(),
+					"status" => 500
 				]);
 			}
-		} else {
-			echo json_encode([
-				"message" => "Uuid is empty!!",
-				"status" => 403
-			]);
+			return;
 		}
+
+		// Handle Kubernetes deployment using new DeploymentManager
+		$selectedTags = array_filter($post['data']['selectedTags'] ?? [], 'filterFalseValues');
+
+		if (empty($selectedTags)) {
+			echo json_encode([
+				"message" => "No environment selected",
+				"status" => 400
+			]);
+			return;
+		}
+
+		$results = [];
+		$hasErrors = false;
+		$deploymentUuids = [];
+
+		foreach ($selectedTags as $tagData) {
+			$environment = array_keys($tagData)[0] ?? null;
+
+			if (empty($environment)) {
+				$results[] = [
+					'environment' => 'unknown',
+					'success' => false,
+					'error' => 'Invalid environment selection'
+				];
+				$hasErrors = true;
+				continue;
+			}
+
+			try {
+				// Use DeploymentManager for orchestrated deployment
+				$result = $this->deploymentManager->deploy(
+					$uuid,
+					$environment,
+					session('uuid') // deployed_by
+				);
+
+				$deploymentUuids[] = $result['deployment_uuid'];
+
+				$results[] = array_merge(['environment' => $environment], $result);
+
+				if (!$result['success']) {
+					$hasErrors = true;
+				}
+
+			} catch (\Exception $e) {
+				log_message('error', "Deployment failed for $environment: " . $e->getMessage());
+				$results[] = [
+					'environment' => $environment,
+					'success' => false,
+					'error' => $e->getMessage()
+				];
+				$hasErrors = true;
+			}
+		}
+
+		// Return comprehensive response
+		$response = [
+			'message' => $hasErrors
+				? 'Some deployments failed. Check deployment details.'
+				: 'All deployments completed successfully! Verify with kubectl get pods.',
+			'status' => $hasErrors ? 207 : 200, // 207 Multi-Status for partial success
+			'deployments' => $results,
+			'deployment_uuids' => $deploymentUuids,
+			'total' => count($results),
+			'successful' => count(array_filter($results, fn($r) => $r['success'] ?? false)),
+			'failed' => count(array_filter($results, fn($r) => !($r['success'] ?? true)))
+		];
+
+		echo json_encode($response);
 	}
 
 	public function create_marketing_template($uuid) {
@@ -498,14 +575,14 @@ class Services extends Api
 		fwrite($secretFileScript, $secretCommand);
 		fclose($secretFileScript);
 
-		shell_exec('/bin/bash /var/www/html/writable/secret/' . $userSelectedENV . '-kubeseal-secret.sh');
+		$kubesealCommand = shell_exec('/bin/bash /var/www/html/writable/secret/' . $userSelectedENV . '-kubeseal-secret.sh');
 
 		$secretsArray = [];
 		foreach ($secretYamlArray as $templateKey3 => $secretYamlTemplate3) {
 			$sealedSecretContent = file_get_contents(WRITEPATH . "secret/" . $userSelectedENV . "-sealed-secret-" . $templateKey3 . "-" . $uuid . ".yaml");
 			if (empty($sealedSecretContent)) {
 				echo json_encode([
-					"message" => "Kubeseal command failed. Please check kubernetes cluster connection is working and Kubeseal is setup.",
+					"message" => "Kubeseal command failed. Please check kubernetes cluster connection is working and Kubeseal is setup. " . $kubesealCommand,
 					"status" => 403
 				]);
 				die;
@@ -910,5 +987,127 @@ class Services extends Api
 			$this->common_model->updateTableData($id, $data, "services");
 		}
 		echo '1';
+	}
+
+	// ========================================
+	// NEW: Deployment Tracking Endpoints
+	// ========================================
+
+	/**
+	 * Get deployment status by deployment UUID
+	 */
+	public function deployment_status($deploymentUuid)
+	{
+		try {
+			$status = $this->deploymentManager->getDeploymentStatus($deploymentUuid);
+
+			if (!$status['found']) {
+				echo json_encode([
+					'message' => 'Deployment not found',
+					'status' => 404
+				]);
+				return;
+			}
+
+			echo json_encode($status);
+		} catch (\Exception $e) {
+			log_message('error', 'Error getting deployment status: ' . $e->getMessage());
+			echo json_encode([
+				'message' => $e->getMessage(),
+				'status' => 500
+			]);
+		}
+	}
+
+	/**
+	 * Get deployment history for a service
+	 * Optional: filter by environment
+	 */
+	public function deployment_history($serviceUuid, $environment = null)
+	{
+		try {
+			$deployments = $this->deploymentModel->getByService($serviceUuid, $environment);
+
+			echo json_encode([
+				'service_uuid' => $serviceUuid,
+				'environment' => $environment,
+				'deployments' => $deployments,
+				'total' => count($deployments)
+			]);
+		} catch (\Exception $e) {
+			log_message('error', 'Error getting deployment history: ' . $e->getMessage());
+			echo json_encode([
+				'message' => $e->getMessage(),
+				'status' => 500
+			]);
+		}
+	}
+
+	/**
+	 * Get deployment logs for a specific deployment
+	 */
+	public function deployment_logs($deploymentUuid)
+	{
+		try {
+			$logs = $this->deploymentLogger->getDeploymentLogs($deploymentUuid);
+			$summary = $this->deploymentLogger->getDeploymentSummary($deploymentUuid);
+
+			echo json_encode([
+				'deployment_uuid' => $deploymentUuid,
+				'logs' => $logs,
+				'summary' => $summary
+			]);
+		} catch (\Exception $e) {
+			log_message('error', 'Error getting deployment logs: ' . $e->getMessage());
+			echo json_encode([
+				'message' => $e->getMessage(),
+				'status' => 500
+			]);
+		}
+	}
+
+	/**
+	 * Get recent deployments for dashboard/monitoring
+	 */
+	public function recent_deployments($limit = 10)
+	{
+		try {
+			$deployments = $this->deploymentModel->getRecentDeployments(
+				(int)$limit,
+				$this->businessUuid
+			);
+
+			echo json_encode([
+				'deployments' => $deployments,
+				'count' => count($deployments)
+			]);
+		} catch (\Exception $e) {
+			log_message('error', 'Error getting recent deployments: ' . $e->getMessage());
+			echo json_encode([
+				'message' => $e->getMessage(),
+				'status' => 500
+			]);
+		}
+	}
+
+	/**
+	 * Get deployment statistics
+	 */
+	public function deployment_statistics($environment = null)
+	{
+		try {
+			$stats = $this->deploymentModel->getStatistics(
+				$this->businessUuid,
+				$environment
+			);
+
+			echo json_encode($stats);
+		} catch (\Exception $e) {
+			log_message('error', 'Error getting deployment statistics: ' . $e->getMessage());
+			echo json_encode([
+				'message' => $e->getMessage(),
+				'status' => 500
+			]);
+		}
 	}
 }

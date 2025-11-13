@@ -4,6 +4,7 @@ use App\Models\Users_model;
 use App\Models\Contact;
 use Config\Services;
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 function getJWTFromRequest($authenticationHeader): string
 {
@@ -17,7 +18,7 @@ function getJWTFromRequest($authenticationHeader): string
 function validateJWTFromRequest(string $encodedToken)
 {
     $key = Services::getSecretKey();
-    JWT::decode($encodedToken, $key, ['HS256']);
+    JWT::decode($encodedToken, new Key($key, 'HS256'));
     //$userModel = new Users_model();
     $userModel = new Contact();
     // $userModel->findUserByEmailAddress($decodedToken->email);
@@ -34,6 +35,6 @@ function getSignedJWTForUser(string $email)
         'exp' => $tokenExpiration,
     ];
 
-    $jwt = JWT::encode($payload, Services::getSecretKey());
+    $jwt = JWT::encode($payload, Services::getSecretKey(), 'HS256');
     return $jwt;
 }

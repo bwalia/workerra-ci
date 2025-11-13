@@ -26,6 +26,16 @@ class JWTAuthenticationFilter implements FilterInterface
         if ($pos  ===  false && $ping  ===  false && $token  ===  false && $publicBlog === false && ($enquiry === false || $method === "POST")) {
 
             $authenticationHeader = $request->getServer('HTTP_AUTHORIZATION');
+
+            // If no Authorization header, check for valid session authentication
+            if (is_null($authenticationHeader)) {
+                $session = Services::session();
+                if ($session->has('uuid') && $session->has('uuid_business')) {
+                    // User is authenticated via session, allow the request
+                    return $request;
+                }
+            }
+
             try {
                 helper('jwt');
                 $encodedToken = getJWTFromRequest($authenticationHeader);
