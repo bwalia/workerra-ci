@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Libraries\K8sDeployment;
 
 use App\Models\Core\Common_model;
@@ -23,12 +22,12 @@ class TemplateRenderer
 
     public function __construct()
     {
-        $this->commonModel = new Common_model();
+        $this->commonModel        = new Common_model();
         $this->serviceDomainModel = new ServiceDomainsModel();
-        $this->secretProcessor = new SecretProcessor();
-        $this->config = config('Deployment');
-        $this->logger = new DeploymentLogger();
-        $this->validator = new DeploymentValidator();
+        $this->secretProcessor    = new SecretProcessor();
+        $this->config             = config('Deployment');
+        $this->logger             = new DeploymentLogger();
+        $this->validator          = new DeploymentValidator();
     }
 
     /**
@@ -49,18 +48,18 @@ class TemplateRenderer
         array $secretTemplateIds
     ): array {
         $renderedTemplates = [];
-        $secrets = $this->secretProcessor->getSecretsForEnvironment($serviceUuid, $environment);
+        $secrets           = $this->secretProcessor->getSecretsForEnvironment($serviceUuid, $environment);
 
         foreach ($secretTemplateIds as $index => $templateId) {
             $template = $this->commonModel->getSingleRowWhere("templates", $templateId, "uuid");
 
-            if (!$template) {
+            if (! $template) {
                 throw new \RuntimeException("Secret template not found: $templateId");
             }
 
             // Validate YAML
             $validationResult = $this->validator->validateYaml($template['template_content']);
-            if (!$validationResult['valid']) {
+            if (! $validationResult['valid']) {
                 throw new \RuntimeException("Invalid YAML in template $templateId: " . $validationResult['error']);
             }
 
@@ -71,18 +70,18 @@ class TemplateRenderer
                 $environment
             );
 
-            if (!empty($result['missing'])) {
+            if (! empty($result['missing'])) {
                 $this->logger->warning("Missing secrets in template", [
                     'template_id' => $templateId,
-                    'missing' => $result['missing']
+                    'missing'     => $result['missing'],
                 ]);
             }
 
             $renderedTemplates[] = [
-                'index' => $index,
-                'template_id' => $templateId,
-                'content' => $result['template'],
-                'replaced_secrets' => $result['replaced']
+                'index'            => $index,
+                'template_id'      => $templateId,
+                'content'          => $result['template'],
+                'replaced_secrets' => $result['replaced'],
             ];
         }
 
@@ -100,19 +99,19 @@ class TemplateRenderer
     ): array {
         $template = $this->commonModel->getSingleRowWhere("templates", $valuesTemplateId, "uuid");
 
-        if (!$template) {
+        if (! $template) {
             throw new \RuntimeException("Values template not found: $valuesTemplateId");
         }
 
         // Validate YAML
         $validationResult = $this->validator->validateYaml($template['template_content']);
-        if (!$validationResult['valid']) {
+        if (! $validationResult['valid']) {
             throw new \RuntimeException("Invalid YAML in values template: " . $validationResult['error']);
         }
 
         // Replace secrets
         $secrets = $this->secretProcessor->getSecretsForEnvironment($serviceUuid, $environment);
-        $result = $this->secretProcessor->replaceSecretsInTemplate(
+        $result  = $this->secretProcessor->replaceSecretsInTemplate(
             $template['template_content'],
             $secrets,
             $environment
@@ -133,9 +132,9 @@ class TemplateRenderer
         );
 
         return [
-            'content' => Yaml::dump($valuesArray, 10, 2),
-            'array' => $valuesArray,
-            'replaced_secrets' => $result['replaced']
+            'content'          => Yaml::dump($valuesArray, 10, 2),
+            'array'            => $valuesArray,
+            'replaced_secrets' => $result['replaced'],
         ];
     }
 
@@ -145,26 +144,26 @@ class TemplateRenderer
     protected function injectDomainConfig(string $serviceUuid, array $valuesArray): array
     {
         $serviceDomains = $this->serviceDomainModel->getRowsByService($serviceUuid);
-        $hostsArray = [];
+        $hostsArray     = [];
 
         foreach ($serviceDomains as $serviceDomain) {
             $domainData = $this->commonModel->getSingleRowWhere("domains", $serviceDomain['domain_uuid'], "uuid");
 
-            if (!empty($domainData) && $domainData) {
+            if (! empty($domainData) && $domainData) {
                 $hostsArray[] = [
-                    'host' => $domainData['name'],
+                    'host'  => $domainData['name'],
                     'paths' => [[
-                        'path' => $domainData['domain_path'],
-                        'pathType' => $domainData['domain_path_type'],
+                        'path'        => $domainData['domain_path'],
+                        'pathType'    => $domainData['domain_path_type'],
                         'serviceName' => $domainData['domain_service_name'],
                         'servicePort' => (int) $domainData['domain_service_port'],
-                    ]]
+                    ]],
                 ];
             }
         }
 
-        if (isset($valuesArray['ingress']['hosts']) && !empty($hostsArray)) {
-            if (!is_array($valuesArray['ingress']['hosts'])) {
+        if (isset($valuesArray['ingress']['hosts']) && ! empty($hostsArray)) {
+            if (! is_array($valuesArray['ingress']['hosts'])) {
                 $valuesArray['ingress']['hosts'] = [];
             }
             $valuesArray['ingress']['hosts'] = array_merge(
@@ -189,7 +188,7 @@ class TemplateRenderer
             "service__secret_value_template__key",
             [
                 "values_temp_id" => $valuesTemplateId,
-                "service_id" => $serviceUuid
+                "service_id"     => $serviceUuid,
             ],
             "array"
         );
@@ -200,7 +199,7 @@ class TemplateRenderer
 
         foreach ($mappings as $mapping) {
             $secretTempId = $mapping['secret_temp_id'];
-            $valuesKey = $mapping['values_key'];
+            $valuesKey    = $mapping['values_key'];
 
             if (isset($sealedSecrets[$secretTempId]) && isset($sealedSecrets[$secretTempId]['env_file'])) {
                 // Navigate to nested key using dot notation
@@ -220,7 +219,7 @@ class TemplateRenderer
         $current = &$array;
 
         foreach ($keys as $key) {
-            if (!isset($current[$key])) {
+            if (! isset($current[$key])) {
                 $current[$key] = [];
             }
             $current = &$current[$key];
@@ -238,19 +237,48 @@ class TemplateRenderer
     ): string {
         $stepsBlock = $this->commonModel->getSingleRowWhere("blocks_list", $serviceUuid, "uuid_linked_table");
 
-        if (!$stepsBlock || empty($stepsBlock['text'])) {
+        if (! $stepsBlock || empty($stepsBlock['text'])) {
             throw new \RuntimeException("Deployment steps not found for service");
         }
 
         $steps = base64_decode($stepsBlock['text']);
+
         $secrets = $this->secretProcessor->getSecretsForEnvironment($serviceUuid, $environment);
 
-        // Replace secrets in steps
+        // Replace secrets in steps (handles both YAML and bash variable formats)
         $result = $this->secretProcessor->replaceSecretsInTemplate($steps, $secrets, $environment);
 
-        // Replace values file path
+        $script = $result['template'];
+
+        // Fix KUBECONFIG export - replace with correct file path
+        // Handle various formats: export KUBECONFIG=$KUBECONFIG, export KUBECONFIG=KUBECONFIG, etc.
+        $kubeconfigPath = $this->config->writablePaths['secrets'] . 'k3s.yaml';
+        $script         = preg_replace(
+            '/export\s+KUBECONFIG\s*=\s*[^\n]+/i',
+            "export KUBECONFIG='" . $kubeconfigPath . "'",
+            $script
+        );
+
+        // Replace values file path - handle multiple patterns
         $valuesPath = $this->config->writablePaths['values'] . $environment . "-values-" . $serviceUuid . ".yaml";
-        $script = str_replace("-f values", "-f " . $valuesPath, $result['template']);
+
+        // Pattern 1: "-f values" (generic placeholder)
+        $script = str_replace("-f values", "-f " . $valuesPath, $script);
+
+        // Pattern 2: "-f values-{uuid}.yaml" or similar variations
+        // Replace any existing values file reference that might include the UUID
+        $script = preg_replace(
+            '/-f\s+[^\s]*values[^\s]*\.yaml(?:-' . preg_quote($serviceUuid, '/') . '\.yaml)?/',
+            '-f ' . $valuesPath,
+            $script
+        );
+
+        // Pattern 3: Clean up any double UUID suffixes (e.g., .yaml-uuid.yaml)
+        $script = str_replace(
+            ".yaml-" . $serviceUuid . ".yaml",
+            ".yaml",
+            $script
+        );
 
         return $script;
     }
@@ -268,25 +296,25 @@ class TemplateRenderer
 
         // Build full path
         $directory = WRITEPATH . $subdir;
-        $fullPath = $directory . $sanitizedFilename;
+        $fullPath  = $directory . $sanitizedFilename;
 
         // Validate path
         $pathValidation = $this->validator->validateFilePath($fullPath);
-        if (!$pathValidation['valid']) {
+        if (! $pathValidation['valid']) {
             throw new \RuntimeException($pathValidation['error']);
         }
 
         // Ensure directory exists
-        if (!is_dir($directory)) {
+        if (! is_dir($directory)) {
             $this->logger->info("Creating directory", ['path' => $directory]);
 
-            if (!mkdir($directory, $this->config->security['directoryPermissions'], true)) {
-                $error = error_get_last();
+            if (! mkdir($directory, $this->config->security['directoryPermissions'], true)) {
+                $error    = error_get_last();
                 $errorMsg = $error ? $error['message'] : 'Unknown error';
                 $this->logger->error("Failed to create directory", [
-                    'path' => $directory,
-                    'error' => $errorMsg,
-                    'permissions' => decoct($this->config->security['directoryPermissions'])
+                    'path'        => $directory,
+                    'error'       => $errorMsg,
+                    'permissions' => decoct($this->config->security['directoryPermissions']),
                 ]);
                 throw new \RuntimeException("Failed to create directory: $directory - $errorMsg");
             }
@@ -306,13 +334,13 @@ class TemplateRenderer
 
             return [
                 'success' => true,
-                'path' => $fullPath,
-                'bytes' => $result
+                'path'    => $fullPath,
+                'bytes'   => $result,
             ];
         } catch (\Exception $e) {
             $this->logger->error("File write failed", [
-                'path' => $fullPath,
-                'error' => $e->getMessage()
+                'path'  => $fullPath,
+                'error' => $e->getMessage(),
             ]);
             throw $e;
         }
@@ -324,11 +352,11 @@ class TemplateRenderer
     public function readTemplateFromFile(string $path): ?string
     {
         $pathValidation = $this->validator->validateFilePath($path);
-        if (!$pathValidation['valid']) {
+        if (! $pathValidation['valid']) {
             throw new \RuntimeException($pathValidation['error']);
         }
 
-        if (!file_exists($path)) {
+        if (! file_exists($path)) {
             return null;
         }
 

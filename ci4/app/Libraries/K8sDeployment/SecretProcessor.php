@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Libraries\K8sDeployment;
 
 use App\Models\Core\Common_model;
@@ -19,8 +18,8 @@ class SecretProcessor
     public function __construct()
     {
         $this->commonModel = new Common_model();
-        $this->config = config('Deployment');
-        $this->logger = new DeploymentLogger();
+        $this->config      = config('Deployment');
+        $this->logger      = new DeploymentLogger();
     }
 
     /**
@@ -36,13 +35,13 @@ class SecretProcessor
      */
     public function getSecretsForEnvironment(string $serviceUuid, string $environment): array
     {
-        $secrets = $this->commonModel->getDataWhere("secrets_services", $serviceUuid, "service_id");
+        $secrets          = $this->commonModel->getDataWhere("secrets_services", $serviceUuid, "service_id");
         $processedSecrets = [];
 
         foreach ($secrets as $secretRelation) {
             $secret = $this->commonModel->getSingleRowWhere("secrets", $secretRelation['secret_id'], "id");
 
-            if (!$secret) {
+            if (! $secret) {
                 $this->logger->warning("Secret not found", ['secret_id' => $secretRelation['secret_id']]);
                 continue;
             }
@@ -54,39 +53,39 @@ class SecretProcessor
                 $environment
             );
 
-            if (!empty($overrideSecret) && $overrideSecret['secret_tags'] === $environment) {
+            if (! empty($overrideSecret) && $overrideSecret['secret_tags'] === $environment) {
                 // Use environment-specific secret
                 $processedSecrets[] = [
-                    'key_name' => $overrideSecret['key_name'],
-                    'key_value' => $overrideSecret['key_value'],
+                    'key_name'    => $overrideSecret['key_name'],
+                    'key_value'   => $overrideSecret['key_value'],
                     'secret_tags' => $overrideSecret['secret_tags'],
-                    'is_override' => true
+                    'is_override' => true,
                 ];
             } else {
                 // Check if secret matches environment or is global
                 if ($environment === $secret['secret_tags'] ||
-                    !$secret['secret_tags'] ||
-                    !isset($secret['secret_tags'])) {
+                    ! $secret['secret_tags'] ||
+                    ! isset($secret['secret_tags'])) {
                     $processedSecrets[] = [
-                        'key_name' => $secret['key_name'],
-                        'key_value' => $secret['key_value'],
+                        'key_name'    => $secret['key_name'],
+                        'key_value'   => $secret['key_value'],
                         'secret_tags' => $secret['secret_tags'] ?? null,
-                        'is_override' => false
+                        'is_override' => false,
                     ];
                 } else {
                     // Try to find global secret (no tag)
                     $globalSecret = $this->commonModel->getSecretByServiceUuid(
                         $secret['key_name'],
                         $serviceUuid,
-                        NULL
+                        null
                     );
 
-                    if (!empty($globalSecret)) {
+                    if (! empty($globalSecret)) {
                         $processedSecrets[] = [
-                            'key_name' => $globalSecret['key_name'],
-                            'key_value' => $globalSecret['key_value'],
+                            'key_name'    => $globalSecret['key_name'],
+                            'key_value'   => $globalSecret['key_value'],
                             'secret_tags' => null,
-                            'is_override' => false
+                            'is_override' => false,
                         ];
                     }
                 }
@@ -98,6 +97,7 @@ class SecretProcessor
 
     /**
      * Replace secrets in template content
+     * Handles both YAML placeholders (KEY_NAME) and bash variables ($KEY_NAME)
      */
     public function replaceSecretsInTemplate(
         string $template,
@@ -105,40 +105,71 @@ class SecretProcessor
         string $environment
     ): array {
         $replacedSecrets = [];
-        $missingSecrets = [];
+        $missingSecrets  = [];
+
+        // ALWAYS replace TARGET_ENV first (before processing other secrets)
+        // This ensures $TARGET_ENV is replaced with environment name, not treated as a variable
+        // IMPORTANT: Replace $TARGET_ENV first (with $), then TARGET_ENV (without $)
+        // If we do it in reverse order, TARGET_ENV gets replaced in $TARGET_ENV, creating $test
+        if (strpos($template, 'TARGET_ENV') !== false || strpos($template, '$TARGET_ENV') !== false) {
+            $template          = str_replace('$TARGET_ENV', $environment, $template);  // Must be first!
+            $template          = str_replace('TARGET_ENV', $environment, $template);
+            $replacedSecrets[] = 'TARGET_ENV';
+        }
 
         foreach ($secrets as $secret) {
             $placeholder = $secret['key_name'];
 
-            // Special handling for TARGET_ENV
+            // Skip TARGET_ENV - already handled above
             if ($placeholder === 'TARGET_ENV') {
-                $template = str_replace($placeholder, $environment, $template);
+                continue;
+            }
+
+            // Skip KUBECONFIG in deployment scripts - it's handled separately as a file path
+            // KUBECONFIG contains base64 certificate data which should NOT be inserted into scripts
+            if ($placeholder === 'KUBECONFIG') {
                 $replacedSecrets[] = $placeholder;
                 continue;
             }
 
-            // Check if placeholder exists in template
+            // Replace both YAML placeholder format (KEY_NAME) and bash variable format ($KEY_NAME)
+            $replaced = false;
+
+            // Check and replace YAML format (without $)
             if (strpos($template, $placeholder) !== false) {
                 $template = str_replace($placeholder, $secret['key_value'], $template);
+                $replaced = true;
+            }
+
+            // Check and replace bash variable format (with $)
+            if (strpos($template, '$' . $placeholder) !== false) {
+                $template = str_replace('$' . $placeholder, $secret['key_value'], $template);
+                $replaced = true;
+            }
+
+            if ($replaced) {
                 $replacedSecrets[] = $placeholder;
             }
         }
 
-        // Check for unreplaced placeholders
-        preg_match_all('/\b[A-Z_]{3,}\b/', $template, $matches);
+        // Check for unreplaced placeholders (both formats)
+        preg_match_all('/\$?[A-Z_]{3,}\b/', $template, $matches);
         $potentialPlaceholders = array_unique($matches[0]);
 
         foreach ($potentialPlaceholders as $placeholder) {
-            if (!in_array($placeholder, $replacedSecrets) &&
-                in_array($placeholder, $this->config->reservedSecrets)) {
-                $missingSecrets[] = $placeholder;
+            // Remove $ prefix for comparison
+            $cleanPlaceholder = ltrim($placeholder, '$');
+
+            if (! in_array($cleanPlaceholder, $replacedSecrets) &&
+                in_array($cleanPlaceholder, $this->config->reservedSecrets)) {
+                $missingSecrets[] = $cleanPlaceholder;
             }
         }
 
         return [
             'template' => $template,
             'replaced' => $replacedSecrets,
-            'missing' => $missingSecrets
+            'missing'  => $missingSecrets,
         ];
     }
 
@@ -154,19 +185,19 @@ class SecretProcessor
             $requiredSecrets = $this->config->reservedSecrets;
         }
 
-        $secrets = $this->getSecretsForEnvironment($serviceUuid, $environment);
+        $secrets     = $this->getSecretsForEnvironment($serviceUuid, $environment);
         $secretNames = array_column($secrets, 'key_name');
-        $missing = [];
+        $missing     = [];
 
         foreach ($requiredSecrets as $required) {
-            if (!in_array($required, $secretNames)) {
+            if (! in_array($required, $secretNames)) {
                 $missing[] = $required;
             }
         }
 
         return [
-            'valid' => empty($missing),
-            'missing' => $missing
+            'valid'   => empty($missing),
+            'missing' => $missing,
         ];
     }
 
@@ -180,7 +211,7 @@ class SecretProcessor
 
         // Fall back to global
         if (empty($kubeconfig)) {
-            $kubeconfig = $this->commonModel->getSecretByServiceUuid("KUBECONFIG", $serviceUuid, NULL);
+            $kubeconfig = $this->commonModel->getSecretByServiceUuid("KUBECONFIG", $serviceUuid, null);
         }
 
         if (empty($kubeconfig)) {
@@ -189,7 +220,7 @@ class SecretProcessor
 
         return [
             'key_value' => $kubeconfig['key_value'],
-            'is_base64' => true
+            'is_base64' => true,
         ];
     }
 
@@ -221,7 +252,7 @@ class SecretProcessor
 
         // Fall back to global
         if (empty($secret)) {
-            $secret = $this->commonModel->getSecretByServiceUuid($secretName, $serviceUuid, NULL);
+            $secret = $this->commonModel->getSecretByServiceUuid($secretName, $serviceUuid, null);
         }
 
         return $secret['key_value'] ?? null;
@@ -232,12 +263,12 @@ class SecretProcessor
      */
     public function sanitizeForLogging(array $secrets): array
     {
-        return array_map(function($secret) {
+        return array_map(function ($secret) {
             return [
-                'key_name' => $secret['key_name'],
-                'key_value' => '***REDACTED***',
+                'key_name'    => $secret['key_name'],
+                'key_value'   => '***REDACTED***',
                 'secret_tags' => $secret['secret_tags'] ?? null,
-                'is_override' => $secret['is_override'] ?? false
+                'is_override' => $secret['is_override'] ?? false,
             ];
         }, $secrets);
     }

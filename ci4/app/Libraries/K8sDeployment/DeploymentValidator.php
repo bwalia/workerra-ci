@@ -35,6 +35,22 @@ class DeploymentValidator
     }
 
     /**
+     * Check if UUID is valid (simple boolean check)
+     *
+     * @param string $uuid UUID to validate
+     * @return bool True if valid UUID format
+     */
+    public function isValidUuid(string $uuid): bool
+    {
+        if (empty($uuid)) {
+            return false;
+        }
+
+        $pattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
+        return (bool)preg_match($pattern, $uuid);
+    }
+
+    /**
      * Validate environment name
      */
     public function validateEnvironment(string $environment): array

@@ -22,6 +22,7 @@ class DeploymentManager
     protected DeploymentValidator $validator;
     protected SecretProcessor $secretProcessor;
     protected TemplateRenderer $templateRenderer;
+    protected SecretKeyMapper $secretKeyMapper;
 
     protected ?string $deploymentUuid = null;
     protected ?string $businessUuid = null;
@@ -35,10 +36,12 @@ class DeploymentManager
         $this->validator = new DeploymentValidator();
         $this->secretProcessor = new SecretProcessor();
         $this->templateRenderer = new TemplateRenderer();
+        $this->secretKeyMapper = new SecretKeyMapper();
 
         // Set logger for other components
         $this->secretProcessor->setLogger($this->logger);
         $this->templateRenderer->setLogger($this->logger);
+        $this->secretKeyMapper->setLogger($this->logger);
 
         $this->businessUuid = session('uuid_business');
 
@@ -282,8 +285,8 @@ class DeploymentManager
             throw new \RuntimeException("Kubeseal failed: " . $output['stderr']);
         }
 
-        // Read sealed secrets
-        $sealedSecrets = [];
+        // Read sealed secrets and prepare them with SecretKeyMapper
+        $sealedSecretFiles = [];
         foreach ($secretFiles as $secretFile) {
             $sealedPath = WRITEPATH . "secret/{$environment}-sealed-secret-{$secretFile['index']}-{$serviceUuid}.yaml";
 
@@ -293,22 +296,18 @@ class DeploymentManager
 
             $sealedContent = Yaml::parse(file_get_contents($sealedPath));
 
-            // Extract sealed secret mappings
-            $mapping = $this->commonModel->getSingleRowMultipleWhere(
-                "service__secret_value_template__key",
-                [
-                    "secret_temp_id" => $secretFile['template_id'],
-                    "service_id" => $serviceUuid
-                ]
-            );
-
-            if (!empty($mapping)) {
-                $envSecret = getNestedValue($sealedContent, $mapping['secret_key'], ",");
-                if ($envSecret) {
-                    $sealedSecrets[$mapping['secret_temp_id']]['env_file'] = $envSecret;
-                }
-            }
+            $sealedSecretFiles[] = [
+                'template_id' => $secretFile['template_id'],
+                'index' => $secretFile['index'],
+                'content' => $sealedContent,
+            ];
         }
+
+        // Use SecretKeyMapper to extract and prepare sealed secrets
+        $sealedSecrets = $this->secretKeyMapper->prepareSealedSecretsForInjection(
+            $serviceUuid,
+            $sealedSecretFiles
+        );
 
         return $sealedSecrets;
     }
@@ -451,5 +450,17 @@ class DeploymentManager
             'logs' => $logs,
             'summary' => $summary
         ];
+    }
+
+    /**
+     * Get SecretKeyMapper instance
+     *
+     * Exposes the SecretKeyMapper for use by controllers
+     *
+     * @return SecretKeyMapper
+     */
+    public function getSecretKeyMapper(): SecretKeyMapper
+    {
+        return $this->secretKeyMapper;
     }
 }
