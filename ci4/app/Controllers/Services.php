@@ -733,25 +733,74 @@ class Services extends Api
 		$getSteps = $this->common_model->getSingleRowWhere("blocks_list", $uuid, "uuid_linked_table");
 		$steps = $getSteps["text"];
 		$steps = base64_decode($steps);
+
+		// ALWAYS replace TARGET_ENV first (before processing other secrets)
+		// This ensures $TARGET_ENV is replaced with environment name, not treated as a variable
+		// IMPORTANT: Replace $TARGET_ENV first (with $), then TARGET_ENV (without $)
+		// If we do it in reverse order, TARGET_ENV gets replaced in $TARGET_ENV, creating $test
+		if (strpos($steps, 'TARGET_ENV') !== false || strpos($steps, '$TARGET_ENV') !== false) {
+			$steps = str_replace('$TARGET_ENV', $userSelectedENV, $steps);  // Must be first!
+			$steps = str_replace('TARGET_ENV', $userSelectedENV, $steps);
+		}
+
 		$secretServices = $this->common_model->getDataWhere("secrets_services", $uuid, "service_id");
 		foreach ($secretServices as $key => $secretService) {
 			$secrets = $this->common_model->getSingleRowWhere("secrets", $secretService['secret_id'], "id");
 
 			if ($userSelectedENV == $secrets["secret_tags"] || !$secrets["secret_tags"] || !isset($secrets["secret_tags"])) {
 				if ($secrets['key_name'] == "TARGET_ENV") {
-					$steps = str_replace("$" . $secrets['key_name'], $userSelectedENV, $steps);
+					// Skip TARGET_ENV - already handled above
+					continue;
+				} elseif ($secrets['key_name'] == "KUBECONFIG") {
+					// Skip KUBECONFIG - it will be handled separately as a file path
+					// Do NOT replace $KUBECONFIG with the base64 value
+					continue;
 				} else {
+					// Replace both bash variable format ($KEY) and plain format (KEY)
 					$steps = str_replace("$" . $secrets['key_name'], $secrets['key_value'], $steps);
+					$steps = str_replace($secrets['key_name'], $secrets['key_value'], $steps);
 				}
 			} else {
 				if ($secrets['key_name'] == "TARGET_ENV") {
-					$steps = str_replace("$" . $secrets['key_name'], $userSelectedENV, $steps);
+					// Skip TARGET_ENV - already handled above
+					continue;
+				} elseif ($secrets['key_name'] == "KUBECONFIG") {
+					// Skip KUBECONFIG - it will be handled separately as a file path
+					// Do NOT replace $KUBECONFIG with the base64 value
+					continue;
 				} else {
+					// Replace both bash variable format ($KEY) and plain format (KEY)
 					$steps = str_replace("$" . $secrets['key_name'], $secrets['key_value'], $steps);
+					$steps = str_replace($secrets['key_name'], $secrets['key_value'], $steps);
 				}
 			}
 		}
-		$steps = str_replace("-f values", "-f " . WRITEPATH . "values/" . $userSelectedENV . "-values", $steps);
+
+		// Fix KUBECONFIG export - replace with correct file path
+		// Handle various formats: export KUBECONFIG=$KUBECONFIG, export KUBECONFIG=KUBECONFIG, etc.
+		$kubeconfigPath = WRITEPATH . "secret/k3s.yaml";
+		$steps = preg_replace(
+			'/export\s+KUBECONFIG\s*=\s*[^\n]+/i',
+			"export KUBECONFIG='" . $kubeconfigPath . "'",
+			$steps
+		);
+
+		// Fix values file path replacement - handle multiple patterns to avoid duplication
+		$valuesPath = WRITEPATH . "values/" . $userSelectedENV . "-values-" . $uuid . ".yaml";
+
+		// Pattern 1: Replace generic "-f values" placeholder
+		$steps = str_replace("-f values", "-f " . $valuesPath, $steps);
+
+		// Pattern 2: Clean up any existing values file references that might have partial paths
+		$steps = preg_replace(
+			'/-f\s+[^\s]*values[^\s]*\.yaml(?:-' . preg_quote($uuid, '/') . '\.yaml)?/',
+			'-f ' . $valuesPath,
+			$steps
+		);
+
+		// Pattern 3: Clean up any double UUID suffixes (e.g., .yaml-uuid.yaml)
+		$steps = str_replace(".yaml-" . $uuid . ".yaml", ".yaml", $steps);
+
 		$helmFile = fopen(WRITEPATH . "helm/" . $userSelectedENV . "-install-" . $uuid . ".sh", "w") or die("Unable to open file!");
 		fwrite($helmFile, $steps);
 		fclose($helmFile);

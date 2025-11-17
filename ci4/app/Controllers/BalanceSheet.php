@@ -1,10 +1,9 @@
 <?php
-
 namespace App\Controllers;
 
 use App\Controllers\Core\CommonController;
-use App\Models\Accounts_model;
 use App\Models\AccountingPeriods_model;
+use App\Models\Accounts_model;
 
 class BalanceSheet extends CommonController
 {
@@ -15,7 +14,7 @@ class BalanceSheet extends CommonController
     {
         parent::__construct();
         $this->accounts_model = new Accounts_model();
-        $this->periods_model = new AccountingPeriods_model();
+        $this->periods_model  = new AccountingPeriods_model();
     }
 
     /**
@@ -31,9 +30,9 @@ class BalanceSheet extends CommonController
         // Get date range from request or use current period
         $asOfDate = $this->request->getGet('as_of_date') ?? ($currentPeriod['end_date'] ?? date('Y-m-d'));
 
-        $this->data['as_of_date'] = $asOfDate;
+        $this->data['as_of_date']  = $asOfDate;
         $this->data['report_data'] = $this->generateBalanceSheet($asOfDate);
-        $this->data['periods'] = $this->periods_model
+        $this->data['periods']     = $this->periods_model
             ->where('uuid_business_id', $this->businessUuid)
             ->orderBy('start_date', 'DESC')
             ->findAll();
@@ -83,9 +82,9 @@ class BalanceSheet extends CommonController
         $accounts = $db->query($query, [$asOfDate, $this->businessUuid])->getResultArray();
 
         // Organize by type
-        $assets = [];
+        $assets      = [];
         $liabilities = [];
-        $equity = [];
+        $equity      = [];
 
         foreach ($accounts as $account) {
             if ($account['account_type'] === 'Asset') {
@@ -98,23 +97,23 @@ class BalanceSheet extends CommonController
         }
 
         // Calculate totals
-        $totalAssets = array_sum(array_column($assets, 'balance'));
+        $totalAssets      = array_sum(array_column($assets, 'balance'));
         $totalLiabilities = array_sum(array_column($liabilities, 'balance'));
-        $totalEquity = array_sum(array_column($equity, 'balance'));
+        $totalEquity      = array_sum(array_column($equity, 'balance'));
 
         // Get net income from P&L
         $netIncome = $this->getNetIncome($asOfDate);
         $totalEquity += $netIncome;
 
         return [
-            'assets' => $assets,
-            'liabilities' => $liabilities,
-            'equity' => $equity,
-            'total_assets' => $totalAssets,
-            'total_liabilities' => $totalLiabilities,
-            'total_equity' => $totalEquity,
-            'net_income' => $netIncome,
-            'total_liabilities_equity' => $totalLiabilities + $totalEquity
+            'assets'                   => $assets,
+            'liabilities'              => $liabilities,
+            'equity'                   => $equity,
+            'total_assets'             => $totalAssets,
+            'total_liabilities'        => $totalLiabilities,
+            'total_equity'             => $totalEquity,
+            'net_income'               => $netIncome,
+            'total_liabilities_equity' => $totalLiabilities + $totalEquity,
         ];
     }
 
@@ -153,13 +152,13 @@ class BalanceSheet extends CommonController
     public function exportPDF($uuid = 0, $view = '')
     {
         // PDF export functionality
-        $asOfDate = $this->request->getGet('as_of_date') ?? date('Y-m-d');
+        $asOfDate   = $this->request->getGet('as_of_date') ?? date('Y-m-d');
         $reportData = $this->generateBalanceSheet($asOfDate);
 
         // Implement PDF generation here
         return $this->response->setJSON([
-            'status' => true,
-            'message' => 'PDF export feature - to be implemented'
+            'status'  => true,
+            'message' => 'PDF export feature - to be implemented',
         ]);
     }
 }

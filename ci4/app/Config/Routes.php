@@ -1,5 +1,4 @@
 <?php
-
 namespace Config;
 
 use CodeIgniter\Config\Services;
@@ -40,12 +39,18 @@ $routes->get('google-logout', 'Auth::googleLogout');
 // route since we don't have to scan directories.
 $routes->get('/', 'Home::index');
 
+// Chat Module Routes (must be before auto-routes to take priority)
+$routes->get('chat', 'Chat::index');
+$routes->get('chat/debug', 'Chat::debug');
+$routes->get('api/token', 'Chat::getToken');
+$routes->post('api/token/refresh', 'Chat::refreshToken');
+
 // Debug permissions route
 $routes->get('debug-permissions', 'DebugPermissions::index');
 $routes->get('debug_permissions', 'DebugPermissions::index');
 
 // Common AJAX search endpoints (used by all modules)
-$routes->group('common', function($routes) {
+$routes->group('common', function ($routes) {
     $routes->get('test', 'CommonAjax::test');
     $routes->get('searchEmployees', 'CommonAjax::searchEmployees');
     $routes->get('searchCustomers', 'CommonAjax::searchCustomers');
@@ -69,7 +74,7 @@ $routes->group('common', function($routes) {
 });
 
 // Project Jobs routes
-$routes->group('project_jobs', function($routes) {
+$routes->group('project_jobs', function ($routes) {
     $routes->get('/', 'ProjectJobs::index');
     $routes->get('index', 'ProjectJobs::index');
     $routes->get('edit/(:segment)', 'ProjectJobs::edit/$1');
@@ -83,7 +88,7 @@ $routes->group('project_jobs', function($routes) {
 });
 
 // Project Job Phases routes
-$routes->group('project_job_phases', function($routes) {
+$routes->group('project_job_phases', function ($routes) {
     $routes->get('index/(:segment)', 'ProjectJobPhases::index/$1');
     $routes->get('phasesList/(:segment)', 'ProjectJobPhases::phasesList/$1');
     $routes->get('edit/(:segment)/(:segment)', 'ProjectJobPhases::edit/$1/$2');
@@ -97,7 +102,7 @@ $routes->group('project_job_phases', function($routes) {
 });
 
 // Project Job Scheduler routes
-$routes->group('project_job_scheduler', function($routes) {
+$routes->group('project_job_scheduler', function ($routes) {
     $routes->get('calendar', 'ProjectJobScheduler::calendar');
     $routes->get('getEvents', 'ProjectJobScheduler::getEvents');
     $routes->post('createEvent', 'ProjectJobScheduler::createEvent');
@@ -134,7 +139,7 @@ $routes->resource('api/v2/employees');
 $routes->resource('api/v2/sprints');
 $routes->resource('api/v2/userbusiness');
 $routes->resource('api/v2/documents'); //
-$routes->resource('api/v2/media'); //
+$routes->resource('api/v2/media');     //
 $routes->resource('api/v2/enquiries');
 $routes->resource('api/v2/taxes');
 $routes->resource('api/v2/purchase_invoices');
@@ -218,7 +223,7 @@ $routes->get('documents/preview/(:segment)', 'Documents::preview/$1');
 $routes->get('documents/download/(:segment)', 'Documents::download/$1');
 
 // Accounting Module Routes
-$routes->group('accounts', function($routes) {
+$routes->group('accounts', function ($routes) {
     $routes->get('/', 'Accounts::index');
     $routes->get('edit/(:segment)', 'Accounts::edit/$1');
     $routes->get('edit', 'Accounts::edit');
@@ -229,7 +234,7 @@ $routes->group('accounts', function($routes) {
 });
 
 // Journal Entries Routes
-$routes->group('journal-entries', function($routes) {
+$routes->group('journal-entries', function ($routes) {
     $routes->get('/', 'JournalEntries::index');
     $routes->get('edit/(:segment)', 'JournalEntries::edit/$1');
     $routes->get('edit', 'JournalEntries::edit');
@@ -240,7 +245,7 @@ $routes->group('journal-entries', function($routes) {
 });
 
 // Accounting Periods Routes
-$routes->group('accounting-periods', function($routes) {
+$routes->group('accounting-periods', function ($routes) {
     $routes->get('/', 'AccountingPeriods::index');
     $routes->get('edit/(:segment)', 'AccountingPeriods::edit/$1');
     $routes->get('edit', 'AccountingPeriods::edit');
@@ -251,7 +256,7 @@ $routes->group('accounting-periods', function($routes) {
 });
 
 // Alternative route with underscores (for backward compatibility)
-$routes->group('accounting_periods', function($routes) {
+$routes->group('accounting_periods', function ($routes) {
     $routes->get('/', 'AccountingPeriods::index');
     $routes->get('edit/(:segment)', 'AccountingPeriods::edit/$1');
     $routes->get('edit', 'AccountingPeriods::edit');
@@ -262,7 +267,7 @@ $routes->group('accounting_periods', function($routes) {
 });
 
 // Payments Routes
-$routes->group('payments', function($routes) {
+$routes->group('payments', function ($routes) {
     $routes->get('/', 'Payments::index');
     $routes->get('edit/(:segment)', 'Payments::edit/$1');
     $routes->get('edit', 'Payments::edit');
@@ -275,7 +280,7 @@ $routes->group('payments', function($routes) {
 });
 
 // Receipts Routes
-$routes->group('receipts', function($routes) {
+$routes->group('receipts', function ($routes) {
     $routes->get('/', 'Receipts::index');
     $routes->get('edit/(:segment)', 'Receipts::edit/$1');
     $routes->get('edit', 'Receipts::edit');

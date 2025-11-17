@@ -53,6 +53,26 @@ function _M.verify_token(token)
     return jwt_obj.payload
 end
 
+-- Get user from database by UUID
+function _M.get_user_by_uuid(uuid)
+    local db = require "chat.config.database"
+
+    local sql = string.format([[
+        SELECT uuid, name, email, role, permissions, uuid_business_id, status
+        FROM users
+        WHERE uuid = %s AND status = 1
+        LIMIT 1
+    ]], db.escape(uuid))
+
+    local res, err = db.query(sql)
+
+    if not res or #res == 0 then
+        return nil, "User not found"
+    end
+
+    return res[1]
+end
+
 -- Get current authenticated user from token
 function _M.get_current_user()
     local token, err = get_token()
@@ -65,7 +85,17 @@ function _M.get_current_user()
         return nil, err
     end
 
-    return payload
+    -- Get fresh user data from database
+    local user, err = _M.get_user_by_uuid(payload.uuid or payload.sub)
+    if not user then
+        return nil, err or "User not found in database"
+    end
+
+    -- Merge token payload with database user data
+    user.exp = payload.exp
+    user.iat = payload.iat
+
+    return user
 end
 
 -- Authenticate request (middleware function)

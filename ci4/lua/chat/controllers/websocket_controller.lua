@@ -1,38 +1,70 @@
 --[[
     WebSocket Controller
-
     Real-time bidirectional communication for chat
 ]]
 
 local server = require "resty.websocket.server"
 local cjson = require "cjson.safe"
 local redis = require "chat.config.redis"
-local auth = require "chat.middleware.auth"
 local logger = require "chat.utils.logger"
 
-local _M = {}
-
--- Active connections registry
-local connections = {}
+-- Get JWT verification functions
+local jwt = require "resty.jwt"
+local config = require "chat.config.app"
 
 -- Create WebSocket connection
 local function create_connection()
     local wb, err = server:new({
-        timeout = 60000,  -- 60 seconds
+        timeout = 60000,
         max_payload_len = 65535
     })
 
     if not wb then
         ngx.log(ngx.ERR, "Failed to create WebSocket: ", err)
-        return ngx.exit(444)
+        return nil, err
     end
 
     return wb
 end
 
+-- Verify JWT token
+local function verify_token(token)
+    if not token then
+        return nil, "Token is required"
+    end
+
+    local jwt_obj = jwt:verify(config.security.jwt_secret, token)
+
+    if not jwt_obj.verified then
+        ngx.log(ngx.ERR, "JWT verification failed: ", jwt_obj.reason)
+        return nil, "Invalid or expired token"
+    end
+
+    return jwt_obj.payload
+end
+
+-- Get user from database
+local function get_user_by_uuid(uuid)
+    local db = require "chat.config.database"
+
+    local sql = string.format([[
+        SELECT uuid, name, email, role, permissions, uuid_business_id, status
+        FROM users
+        WHERE uuid = %s AND status = 1
+        LIMIT 1
+    ]], db.escape(uuid))
+
+    local res, err = db.query(sql)
+
+    if not res or #res == 0 then
+        return nil, "User not found"
+    end
+
+    return res[1]
+end
+
 -- Authenticate WebSocket connection
 local function authenticate_connection()
-    -- Get token from query parameter or first message
     local args = ngx.req.get_uri_args()
     local token = args.token
 
@@ -40,14 +72,12 @@ local function authenticate_connection()
         return nil, "Token required"
     end
 
-    -- Verify JWT token
-    local payload, err = auth.verify_token(token)
+    local payload, err = verify_token(token)
     if not payload then
         return nil, err or "Invalid token"
     end
 
-    -- Get user from database
-    local user, err = auth.get_user_by_uuid(payload.sub)
+    local user, err = get_user_by_uuid(payload.sub or payload.uuid)
     if not user then
         return nil, "User not found"
     end
@@ -78,33 +108,24 @@ local function handle_message(user, data)
     local message_data = data.data
 
     if message_type == "ping" then
-        return {type = "pong"}
-
+        return { type = "pong" }
     elseif message_type == "subscribe_channel" then
-        -- Client wants to subscribe to a channel
         local channel_uuid = message_data.channel_uuid
         if channel_uuid then
-            -- Subscribe to Redis channel
-            local channel_key = "chat:channel:" .. channel_uuid
-            -- Store subscription in connection metadata
             return {
                 type = "subscribed",
-                data = {channel_uuid = channel_uuid}
+                data = { channel_uuid = channel_uuid }
             }
         end
-
     elseif message_type == "unsubscribe_channel" then
-        -- Client wants to unsubscribe from a channel
         local channel_uuid = message_data.channel_uuid
         if channel_uuid then
             return {
                 type = "unsubscribed",
-                data = {channel_uuid = channel_uuid}
+                data = { channel_uuid = channel_uuid }
             }
         end
-
     elseif message_type == "typing_start" then
-        -- User started typing
         local channel_uuid = message_data.channel_uuid
         if channel_uuid then
             redis.publish("chat:channel:" .. channel_uuid, cjson.encode({
@@ -115,11 +136,9 @@ local function handle_message(user, data)
                     channel_uuid = channel_uuid
                 }
             }))
-            return {type = "ack"}
+            return { type = "ack" }
         end
-
     elseif message_type == "typing_stop" then
-        -- User stopped typing
         local channel_uuid = message_data.channel_uuid
         if channel_uuid then
             redis.publish("chat:channel:" .. channel_uuid, cjson.encode({
@@ -129,72 +148,31 @@ local function handle_message(user, data)
                     channel_uuid = channel_uuid
                 }
             }))
-            return {type = "ack"}
+            return { type = "ack" }
         end
-
     else
         return {
             type = "error",
-            data = {message = "Unknown message type: " .. tostring(message_type)}
+            data = { message = "Unknown message type: " .. tostring(message_type) }
         }
     end
 
-    return {type = "ack"}
-end
-
--- Redis subscriber thread (runs in background)
-local function redis_subscriber(user_uuid, subscribed_channels, wb)
-    local red, err = redis.connect()
-    if not red then
-        ngx.log(ngx.ERR, "Redis connection failed: ", err)
-        return
-    end
-
-    -- Subscribe to user's personal channel
-    red:subscribe("chat:user:" .. user_uuid)
-
-    -- Subscribe to all subscribed channels
-    for channel_uuid, _ in pairs(subscribed_channels) do
-        red:subscribe("chat:channel:" .. channel_uuid)
-    end
-
-    -- Listen for messages
-    while true do
-        local res, err = red:read_reply()
-        if not res then
-            if err ~= "timeout" then
-                ngx.log(ngx.ERR, "Redis read error: ", err)
-                break
-            end
-        else
-            -- Forward message to WebSocket client
-            if res[1] == "message" then
-                local channel = res[2]
-                local message = res[3]
-
-                local decoded = cjson.decode(message)
-                if decoded then
-                    send_message(wb, decoded.type, decoded.data)
-                end
-            end
-        end
-    end
-
-    redis.close(red)
+    return { type = "ack" }
 end
 
 -- Main WebSocket handler
-function _M.handle()
+local function handle_websocket()
     -- Create WebSocket connection
-    local wb = create_connection()
+    local wb, err = create_connection()
     if not wb then
-        return
+        ngx.say("Failed to create WebSocket connection")
+        return ngx.exit(500)
     end
 
     -- Authenticate
     local user, err = authenticate_connection()
     if not user then
-        send_message(wb, "error", {message = err})
+        send_message(wb, "error", { message = err or "Authentication failed" })
         wb:send_close()
         return
     end
@@ -230,25 +208,22 @@ function _M.handle()
                 break
             end
         elseif typ == "pong" then
-            -- Pong received, connection is alive
+            -- Pong received
         elseif typ == "text" then
-            -- Parse incoming message
             local message = cjson.decode(data)
             if message then
-                -- Handle channel subscriptions
                 if message.type == "subscribe_channel" then
                     subscribed_channels[message.data.channel_uuid] = true
                 elseif message.type == "unsubscribe_channel" then
                     subscribed_channels[message.data.channel_uuid] = nil
                 end
 
-                -- Handle message and send response
                 local response = handle_message(user, message)
                 if response then
                     send_message(wb, response.type, response.data or {})
                 end
             else
-                send_message(wb, "error", {message = "Invalid JSON"})
+                send_message(wb, "error", { message = "Invalid JSON" })
             end
         end
     end
@@ -258,7 +233,5 @@ function _M.handle()
     wb:send_close()
 end
 
--- Entry point
-_M.handle()
-
-return _M
+-- Execute handler
+handle_websocket()

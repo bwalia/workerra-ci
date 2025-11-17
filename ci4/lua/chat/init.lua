@@ -8,33 +8,20 @@ local _M = {}
 
 function _M.init()
     -- Initialize shared dictionaries
-    ngx.log(ngx.INFO, "Chat system initialized")
+    ngx.log(ngx.INFO, "Chat system: Initialization started")
 
-    -- Test database connection
-    local db = require "chat.config.database"
-    local ok, err = db.test_connection()
+    -- NOTE: Cannot test database connection in init_by_lua phase
+    -- because ngx.socket is not available. Database connection will
+    -- be tested on first request.
+    ngx.log(ngx.INFO, "Chat system: Database will be initialized on first request")
 
-    if not ok then
-        ngx.log(ngx.ERR, "Database connection failed: ", err)
-    else
-        ngx.log(ngx.INFO, "Database connection successful")
-    end
+    -- NOTE: Cannot test Redis connection in init_by_lua phase
+    ngx.log(ngx.INFO, "Chat system: Redis will be initialized on first request")
 
-    -- Test Redis connection (optional)
-    local redis = require "chat.config.redis"
-    local ok, err = redis.test_connection()
+    -- NOTE: UUID generation will be initialized per-worker
+    ngx.log(ngx.INFO, "Chat system: UUID generation will be initialized per-worker")
 
-    if not ok then
-        ngx.log(ngx.WARN, "Redis connection failed: ", err, " (Redis is optional)")
-    else
-        ngx.log(ngx.INFO, "Redis connection successful")
-    end
-
-    -- Set up UUID generation
-    local uuid = require "resty.jit-uuid"
-    uuid.seed()
-
-    ngx.log(ngx.INFO, "Chat system initialization complete")
+    ngx.log(ngx.INFO, "Chat system: Initialization complete")
 end
 
 return _M
