@@ -218,35 +218,28 @@ class Services extends Api
 
 			$secKeysName = $post['secKeysName'];
 			$valKeysName = $post['valKeysName'];
-			if (!empty($secKeysName) && !empty($valKeysName)) {
-				$secValKeys = [];
-				$secretTemIds = array_keys($secKeysName);
-				foreach ($secretTemIds as $key => $secretTemId) {
-					$secValKeys[$key]['secTempId'] = $secretTemId;
-					$secValKeys[$key]['secKey'] = $secKeysName[$secretTemId][0];
-				}
-				$ValTemIds = array_keys($valKeysName);
-				foreach ($ValTemIds as $key => $valTemId) {
-					$valArray = explode("/", $valTemId);
-					$secValKeys[$key]['valTempId'] = $valArray[0];
-					$secValKeys[$key]['valKey'] = $valKeysName[$valTemId][0];
-				}
-				if (!empty($secValKeys)) {
-					$this->common_model->deleteTableData("service__secret_value_template__key", $data['uuid'], "service_id");
-					foreach ($secValKeys as $secValKey) {
-						$secValData = [
-							'service_id' => $data['uuid'],
-							'secret_temp_id' => $secValKey['secTempId'],
-							'secret_key' => $secValKey['secKey'],
-							'values_temp_id' => $secValKey['valTempId'],
-							'values_key' => $secValKey['valKey'],
-							'uuid' => UUID::v5(UUID::v4(), 'service__secret_value_template__key'),
-							'uuid_business_id' => $this->businessUuid
-						];
-						$this->common_model->insertTableData($secValData, "service__secret_value_template__key");
-					}
-				}
 
+			// Use the new SecretKeyMapper for professional secret key mapping
+			if (!empty($secKeysName) && !empty($valKeysName)) {
+				try {
+					$secretKeyMapper = $this->deploymentManager->getSecretKeyMapper();
+					$result = $secretKeyMapper->saveMappings(
+						$data['uuid'],
+						json_decode($secretTemplateId, true),
+						$valuesTemplateId,
+						$secKeysName,
+						$valKeysName
+					);
+
+					if (!$result['success']) {
+						log_message('error', 'Failed to save secret key mappings: ' . json_encode($result['errors']));
+					} else {
+						log_message('info', "Saved {$result['count']} secret key mappings for service {$data['uuid']}");
+					}
+				} catch (\Exception $e) {
+					log_message('error', 'Exception while saving secret key mappings: ' . $e->getMessage());
+					// Continue execution - don't break service update for mapping errors
+				}
 			}
 		}
 		if ($marketingTemplate) {
