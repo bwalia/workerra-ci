@@ -8,12 +8,15 @@ local channel_service = require "chat.services.channel_service"
 local auth = require "chat.middleware.auth"
 local response = require "chat.utils.response"
 local validator = require "chat.utils.validator"
+local cJson = require "cjson"
 
 local _M = {}
 
 -- GET /api/chat/channels - List user's channels
 function _M.index()
     local user = auth.authenticate()
+    ngx.say(cJson.encode(user))
+    ngx.exit(ngx.HTTP_OK)
 
     local channels, err = channel_service.get_user_channels(user.uuid)
     if not channels then
@@ -29,13 +32,13 @@ function _M.store()
 
     local ok, data = validator.json_body()
     if not ok then
-        return response.validation_error({data})
+        return response.validation_error({ data })
     end
 
     -- Validate
     local ok, errors = validator.validate_fields(data, {
-        name = {{"required"}, {"length", {min = 1, max = 100}}},
-        type = {{"required"}, {"in", {"public", "private", "direct"}}},
+        name = { { "required" }, { "length", { min = 1, max = 100 } } },
+        type = { { "required" }, { "in", { "public", "private", "direct" } } },
     })
 
     if not ok then
@@ -68,12 +71,12 @@ function _M.add_members(channel_uuid)
 
     local ok, data = validator.json_body()
     if not ok then
-        return response.validation_error({data})
+        return response.validation_error({ data })
     end
 
     -- Validate
     local ok, errors = validator.validate_fields(data, {
-        user_uuids = {{"required"}},
+        user_uuids = { { "required" } },
     })
 
     if not ok then
@@ -81,7 +84,7 @@ function _M.add_members(channel_uuid)
     end
 
     if type(data.user_uuids) ~= "table" then
-        return response.validation_error({{field = "user_uuids", message = "Must be an array"}})
+        return response.validation_error({ { field = "user_uuids", message = "Must be an array" } })
     end
 
     local added, err = channel_service.add_members(channel_uuid, data.user_uuids, user.uuid)
@@ -89,7 +92,7 @@ function _M.add_members(channel_uuid)
         return response.error(err, 400)
     end
 
-    return response.success({added = added})
+    return response.success({ added = added })
 end
 
 -- DELETE /api/chat/channels/:uuid/members/:user_uuid - Remove member
@@ -101,7 +104,7 @@ function _M.remove_member(channel_uuid, user_uuid)
         return response.error(err, 400)
     end
 
-    return response.success({message = "Member removed"})
+    return response.success({ message = "Member removed" })
 end
 
 -- PUT /api/chat/channels/:uuid/read - Mark channel as read
@@ -113,7 +116,7 @@ function _M.mark_read(channel_uuid)
         return response.error(err, 500)
     end
 
-    return response.success({message = "Marked as read"})
+    return response.success({ message = "Marked as read" })
 end
 
 return _M

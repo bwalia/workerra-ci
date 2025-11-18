@@ -45,6 +45,15 @@ $routes->get('chat/debug', 'Chat::debug');
 $routes->get('api/token', 'Chat::getToken');
 $routes->post('api/token/refresh', 'Chat::refreshToken');
 
+// Chat API Routes (temporary CodeIgniter implementation until OpenResty is configured)
+$routes->group('api/chat', ['namespace' => 'App\Controllers\Api'], function($routes) {
+    $routes->get('channels', 'ChatApi::channels');
+    $routes->post('channels', 'ChatApi::channels');
+    $routes->get('messages', 'ChatApi::messages');
+    $routes->post('messages', 'ChatApi::messages');
+    $routes->get('health', 'ChatApi::health');
+});
+
 // Debug permissions route
 $routes->get('debug-permissions', 'DebugPermissions::index');
 $routes->get('debug_permissions', 'DebugPermissions::index');

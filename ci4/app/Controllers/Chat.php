@@ -1,10 +1,9 @@
 <?php
-
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
-use Config\Services;
 use CodeIgniter\HTTP\ResponseInterface;
+use Config\Services;
 
 /**
  * Chat Controller
@@ -39,7 +38,7 @@ class Chat extends BaseController
         $this->session = Services::session();
 
         // Check if user is logged in (same pattern as CommonController and Dashboard)
-        if (!$this->session->get('uuid')) {
+        if (! $this->session->get('uuid')) {
             header('Location:/');
             die();
         }
@@ -60,15 +59,15 @@ class Chat extends BaseController
     {
         // Get user data from session (following the exact pattern from Home controller login)
         $userData = [
-            'id' => $this->session->get('uuid'),                    // User ID
-            'uuid' => $this->session->get('userUuid'),              // User UUID
-            'name' => $this->session->get('uname'),                 // User name
-            'email' => $this->session->get('uemail'),               // User email
-            'role' => $this->session->get('role'),                  // User role (1=user, 2=admin)
-            'profile_img' => $this->session->get('profile_img'),    // Profile image
+            'id'               => $this->session->get('uuid'),              // User ID
+            'uuid'             => $this->session->get('userUuid'),          // User UUID
+            'name'             => $this->session->get('uname'),             // User name
+            'email'            => $this->session->get('uemail'),            // User email
+            'role'             => $this->session->get('role'),              // User role (1=user, 2=admin)
+            'profile_img'      => $this->session->get('profile_img'),       // Profile image
             'uuid_business_id' => $this->session->get('uuid_business_id'),  // Business UUID
-            'uuid_business' => $this->businessUuid,                 // Alternative business UUID
-            'permissions' => $this->session->get('permissions') ?? [],  // User permissions array
+            'uuid_business'    => $this->businessUuid,                      // Alternative business UUID
+            'permissions'      => $this->session->get('permissions') ?? [], // User permissions array
         ];
 
         // Generate JWT token for this user session (for Lua API authentication)
@@ -76,11 +75,11 @@ class Chat extends BaseController
 
         // Prepare data for view
         $data = [
-            'title' => 'Chat',
-            'user' => $userData,
-            'jwt_token' => $jwtToken,
+            'title'        => 'Chat',
+            'user'         => $userData,
+            'jwt_token'    => $jwtToken,
             'api_base_url' => base_url('api/chat'),
-            'ws_url' => $this->getWebSocketUrl(),
+            'ws_url'       => $this->getWebSocketUrl(),
         ];
 
         return view('chat/index', $data);
@@ -106,17 +105,17 @@ class Chat extends BaseController
         // JWT Payload - includes all user data needed by Lua middleware
         // NOTE: We don't include the full permissions array to keep the token size small
         $payload = json_encode([
-            // Standard JWT claims
-            'sub' => $user['uuid'],                      // Subject (user UUID)
-            'iat' => time(),                             // Issued at
-            'exp' => time() + 86400,                     // Expires in 24 hours
+                                                  // Standard JWT claims
+            'sub'              => $user['uuid'],  // Subject (user UUID)
+            'iat'              => time(),         // Issued at
+            'exp'              => time() + 86400, // Expires in 24 hours
 
-            // Custom claims for chat system (matches Lua auth middleware expectations)
-            'uuid' => $user['uuid'],                     // User UUID
-            'email' => $user['email'],                   // User email
-            'name' => $user['name'],                     // User name
-            'role' => (int)$user['role'],                // User role (convert to int)
-            'uuid_business_id' => $user['uuid_business_id'],  // Business UUID for multi-tenancy
+                                                             // Custom claims for chat system (matches Lua auth middleware expectations)
+            'uuid'             => $user['uuid'],             // User UUID
+            'email'            => $user['email'],            // User email
+            'name'             => $user['name'],             // User name
+            'role'             => (int) $user['role'],       // User role (convert to int)
+            'uuid_business_id' => $user['uuid_business_id'], // Business UUID for multi-tenancy
 
             // Don't include full permissions array - it's too large for headers
             // The Lua middleware will fetch user from database which has permissions
@@ -129,7 +128,7 @@ class Chat extends BaseController
         $base64UrlPayload = $this->base64UrlEncode($payload);
 
         // Create Signature using HMAC-SHA256
-        $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $secret, true);
+        $signature          = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $secret, true);
         $base64UrlSignature = $this->base64UrlEncode($signature);
 
         // Create JWT (header.payload.signature)
@@ -178,20 +177,20 @@ class Chat extends BaseController
     public function getToken()
     {
         // Check authentication
-        if (!$this->session->get('uuid')) {
+        if (! $this->session->get('uuid')) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Not authenticated'
+                'message' => 'Not authenticated',
             ])->setStatusCode(ResponseInterface::HTTP_UNAUTHORIZED);
         }
 
         // Get user data from session
         $userData = [
-            'uuid' => $this->session->get('userUuid'),
-            'name' => $this->session->get('uname'),
-            'email' => $this->session->get('uemail'),
-            'role' => $this->session->get('role'),
-            'permissions' => $this->session->get('permissions') ?? [],
+            'uuid'             => $this->session->get('userUuid'),
+            'name'             => $this->session->get('uname'),
+            'email'            => $this->session->get('uemail'),
+            'role'             => $this->session->get('role'),
+            'permissions'      => $this->session->get('permissions') ?? [],
             'uuid_business_id' => $this->session->get('uuid_business_id'),
         ];
 
@@ -201,16 +200,16 @@ class Chat extends BaseController
         // Return token with user info
         return $this->response->setJSON([
             'success' => true,
-            'data' => [
-                'token' => $token,
+            'data'    => [
+                'token'      => $token,
                 'expires_in' => 86400,
-                'user' => [
-                    'uuid' => $userData['uuid'],
-                    'name' => $userData['name'],
+                'user'       => [
+                    'uuid'  => $userData['uuid'],
+                    'name'  => $userData['name'],
                     'email' => $userData['email'],
-                    'role' => $userData['role']
-                ]
-            ]
+                    'role'  => $userData['role'],
+                ],
+            ],
         ]);
     }
 
@@ -225,20 +224,20 @@ class Chat extends BaseController
     public function refreshToken()
     {
         // Check authentication
-        if (!$this->session->get('uuid')) {
+        if (! $this->session->get('uuid')) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Not authenticated'
+                'message' => 'Not authenticated',
             ])->setStatusCode(ResponseInterface::HTTP_UNAUTHORIZED);
         }
 
         // Get user data from session
         $userData = [
-            'uuid' => $this->session->get('userUuid'),
-            'name' => $this->session->get('uname'),
-            'email' => $this->session->get('uemail'),
-            'role' => $this->session->get('role'),
-            'permissions' => $this->session->get('permissions') ?? [],
+            'uuid'             => $this->session->get('userUuid'),
+            'name'             => $this->session->get('uname'),
+            'email'            => $this->session->get('uemail'),
+            'role'             => $this->session->get('role'),
+            'permissions'      => $this->session->get('permissions') ?? [],
             'uuid_business_id' => $this->session->get('uuid_business_id'),
         ];
 
@@ -248,10 +247,10 @@ class Chat extends BaseController
         // Return new token
         return $this->response->setJSON([
             'success' => true,
-            'data' => [
-                'token' => $token,
-                'expires_in' => 86400
-            ]
+            'data'    => [
+                'token'      => $token,
+                'expires_in' => 86400,
+            ],
         ]);
     }
 
@@ -266,42 +265,42 @@ class Chat extends BaseController
     public function debug()
     {
         // Check authentication
-        if (!$this->session->get('uuid')) {
+        if (! $this->session->get('uuid')) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Not authenticated'
+                'message' => 'Not authenticated',
             ]);
         }
 
         // Collect session data (safely, without exposing sensitive info)
         $sessionData = [
-            'uuid' => $this->session->get('uuid'),
-            'userUuid' => $this->session->get('userUuid'),
-            'uname' => $this->session->get('uname'),
-            'uemail' => $this->session->get('uemail'),
-            'role' => $this->session->get('role'),
+            'uuid'             => $this->session->get('uuid'),
+            'userUuid'         => $this->session->get('userUuid'),
+            'uname'            => $this->session->get('uname'),
+            'uemail'           => $this->session->get('uemail'),
+            'role'             => $this->session->get('role'),
             'uuid_business_id' => $this->session->get('uuid_business_id'),
-            'uuid_business' => $this->session->get('uuid_business'),
-            'has_permissions' => !empty($this->session->get('permissions')),
+            'uuid_business'    => $this->session->get('uuid_business'),
+            'has_permissions'  => ! empty($this->session->get('permissions')),
             'permission_count' => is_array($this->session->get('permissions')) ? count($this->session->get('permissions')) : 0,
-            'jwt_token_exists' => !empty($this->session->get('jwt_token')),
+            'jwt_token_exists' => ! empty($this->session->get('jwt_token')),
         ];
 
         // Generate sample JWT for testing
         $testJwt = $this->generateJWTToken([
-            'uuid' => $sessionData['userUuid'],
-            'email' => $sessionData['uemail'],
-            'name' => $sessionData['uname'],
-            'role' => $sessionData['role'],
-            'permissions' => $this->session->get('permissions') ?? [],
+            'uuid'             => $sessionData['userUuid'],
+            'email'            => $sessionData['uemail'],
+            'name'             => $sessionData['uname'],
+            'role'             => $sessionData['role'],
+            'permissions'      => $this->session->get('permissions') ?? [],
             'uuid_business_id' => $sessionData['uuid_business_id'],
         ]);
 
         return $this->response->setJSON([
-            'success' => true,
-            'session' => $sessionData,
-            'generated_jwt' => $testJwt,
-            'jwt_secret_configured' => !empty(Services::getSecretKey())
+            'success'               => true,
+            'session'               => $sessionData,
+            'generated_jwt'         => $testJwt,
+            'jwt_secret_configured' => ! empty(Services::getSecretKey()),
         ]);
     }
 }
